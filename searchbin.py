@@ -121,39 +121,32 @@ def get_args():
     
     p.add_argument('-f', '--file', type=str,
             metavar='FILE', dest='fpattern',
-            help='file to read search pattern from')
-    p.add_argument('-t', '--text', type=str,
+            help='file containing patterns to search for')
+    p.add_argument('--text', type=str,
             metavar='PATTERN', dest='tpattern',
-            help='a (utf-8 case-sensitive) text string to search for')
+            help='text string like \"AB\"')
     p.add_argument('-p', '--pattern', type=str, # I would use -h for hex, but that's used for help output.
             metavar='PATTERN', dest='ppattern',
-            help='a hexidecimal pattern to search for')
-    try:    # Python 3.
-        p.add_argument('-b', '--buffer-size', type=int,
-                metavar='NUM', dest='bsize',
-                help='read buffer size (in bytes). 8MB default')
-        p.add_argument('-s', '--start', type=int,
-                metavar='NUM', dest='start',
-                help='starting position in file to begin searching, as bytes')
-        p.add_argument('-e', '--end', type=int,
-                metavar='NUM', dest='end',
-                help='end search at this position, measuring from beginning of file')
-        p.add_argument('-m', '--max-matches', type=int,
-                metavar='NUM', dest='max_matches',
-                help='maximum number of matches to find (0=infinite)')
-    except: # Python 2.
-        p.add_argument('-b', '--buffer-size', type=long,
-                metavar='NUM', dest='bsize',
-                help='read buffer size (in bytes). default is 8388608 (8MB)')
-        p.add_argument('-s', '--start', type=long,
-                metavar='NUM', dest='start',
-                help='starting position in file to begin searching, as bytes')
-        p.add_argument('-e', '--end', type=long,
-                metavar='NUM', dest='end',
-                help='end search at this position, measuring from beginning of file')
-        p.add_argument('-m', '--max-matches', type=long,
-                metavar='NUM', dest='max_matches',
-                help='maximum number of matches to find (0=infinite)')
+            help='hex string like \"4142\" or \"0x41 0x42\"')
+    
+    p.add_argument('-b', '--before', metavar='NUM', dest='before', default=0, type=int,
+            help='print this many bytes before start of match')
+    p.add_argument('-a', '--after', metavar='NUM', dest='after', default=32, type=int,
+            help='print that many bytes after start of match')
+
+    p.add_argument('--buffer-size', type=int,
+            metavar='NUM', dest='bsize',
+            help='read buffer size (in bytes). 8MB default')
+    p.add_argument('-s', '--start', type=int,
+            metavar='NUM', dest='start',
+            help='starting position in file to begin searching, as bytes')
+    p.add_argument('-e', '--end', type=int,
+            metavar='NUM', dest='end',
+            help='end search at this position, measuring from beginning of file')
+    p.add_argument('--max-matches', type=int,
+            metavar='NUM', dest='max_matches',
+            help='maximum number of matches to find (0=infinite)')
+    
     p.add_argument('-l', '--log', type=str,
             metavar='FILE', dest='log',
             help='write matched offsets to FILE, instead of standard output')
@@ -184,15 +177,12 @@ text "A??C"  becomes ['A', '', 'C']
 def hex_to_pattern(hex):
     """ Converts a hex string into a pattern. """
     ret = []
-    pattern = hex
-    if hex[:2] == "0x": # Remove "0x" from start if it exists.
-        pattern = hex[2:]
+
+    # remove all whitespace, tabs, 0x and 0X prefixes.
+    pattern = hex.replace(" ", "").replace("0x", "").replace("0X", "").replace("\t", "")
     try:
         ret = [ p for p in pattern.split("??") ]
-        try:                  # Python 3.
-            return [ bytes.fromhex(p) for p in ret ]
-        except AttributeError: # Python 2.
-            return [ p.decode("hex") for p in ret ]
+        return [ bytes.fromhex(p) for p in ret ]
     except(TypeError, ValueError):
         e = sys.exc_info()[1]
         _exit_error("decode", hex, e)
@@ -285,7 +275,8 @@ def search(ar, fh):
     if not DEBUG:
         _search_loop(ar.start, ar.end, ar.bsize, ar.pattern,
                 ar.max_matches, ar.log, ar.verbose, fh.name,
-                fh.read, fh.seek)
+                ar.before, ar.after,
+                fh.read, fh.seek, fh)
     else:
         _debug_search(ar.pattern, fh.name, fh.read)
 
@@ -325,7 +316,8 @@ def _debug_search(pattern, fh_name, fh_read):
 
 
 def _search_loop(start, end, bsize, pattern, max_matches,
-        log, verbose, fh_name, fh_read, fh_seek):
+        log, verbose, fh_name, before, after, 
+        fh_read, fh_seek, fh):
     """
     Primary search function.
     Returns nothing.
@@ -374,8 +366,11 @@ def _search_loop(start, end, bsize, pattern, max_matches,
                 
                 # Print matched offset.
                 find_offset = offset + match
-                STDOUT.write("Match at offset: %14d %12X in  %s\n" % (
+                STDOUT.write("offset: %14d  0x%-8X   %12s\n" % (
                         find_offset, find_offset, fh_name))
+                data = read_at_offset(fh, find_offset-before, before + after)
+                data_hex = hexdump(data, 16, find_offset)
+                STDOUT.write("%s" % (data_hex))
                 
                 if max_matches:
                     max_matches -= 1
@@ -395,6 +390,28 @@ def _search_loop(start, end, bsize, pattern, max_matches,
     except IOError:
         e = sys.exc_info()[1]
         _exit_error("read", fh_name, e)
+
+
+def read_at_offset(file_handle, offset, size):
+    current_pos = file_handle.tell()
+    file_handle.seek(offset)
+    data = file_handle.read(size)
+    file_handle.seek(current_pos)
+    return data
+
+
+def hexdump(data, length=16, offset=0):
+    def format_line(addr, line):
+        hex_part = ' '.join(f'{byte:02x}' for byte in line)
+        ascii_part = ''.join(chr(byte) if 32 <= byte < 127 else '.' for byte in line)
+        return f'{addr:08x}  {hex_part:<{length * 3}}  {ascii_part}'
+
+    ret = ""
+    for i in range(0, len(data), length):
+        line = data[i:i + length]
+        ret += format_line(i+offset, line) + "\n"
+    
+    return ret
 
 
 def main():

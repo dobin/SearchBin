@@ -1,44 +1,38 @@
+# SearchBin
+
 SearchBin is a fast commandline program for searching within binary files. It's a bit like grep for binaries.
 
 It has three capabilities for searching.
--Search for bytes using hexidecimal
--Search for a plain text string
--Search for a smaller binary file
+* Search for bytes using hexidecimal `-p`
+* Search for a smaller binary file `-t`
+* Search for a plain text string `-f`
+
+This is based on [Sepero/SearchBin](https://github.com/Sepero/SearchBin) last updated 2014.
 
 
-Syntax:
-searchbin.py -t PATTERN [FILE [FILE...]]
-searchbin.py -p PATTERN [FILE [FILE...]]
-searchbin.py -f FILE    [FILE [FILE...]]
+## Examples
 
-
-EXAMPLES
 Search for the hex bytes "FF14DE" in the file gamefile.db:
+
+```
 $ ./searchbin.py -p "FF14DE" gamefile.db
 Match at offset:            907          38B in  gamefile.db
 Match at offset:           1881          759 in  gamefile.db
 Match at offset:           7284         1C74 in  gamefile.db
 Match at offset:           7420         1CFC in  gamefile.db
 Match at offset:           8096         1FA0 in  gamefile.db
+```
 
-
-The printed offsets are listed in decimal and hexidecimal formats.
 You can also search for unknown patterns with "??". Just insert them where ever you have an unknown byte:
+```
 $ ./searchbin.py -p "FF??DE" gamefile.db
+```
 
 
-You can search through multiple files at once, and search piped input:
-$ ./searchbin.py -p "FF??EE" gamefile.db supersecret.idx
-$ cat gamefile.db | ./searchbin -p "FF??EE"
 
+## Options
 
-You can also search using regular text strings and other binary files.
-$ ./searchbin.py -t "hello" gamefile.db
-$ ./searchbin.py -f binaryfile gamefile.db
-
-
-Options of SearchBin:
-
+```
 $ ./searchbin.py --help
 
 Optional Arguments:
@@ -61,7 +55,7 @@ Optional Arguments:
   -v, --verbose         verbose, output the number of bytes searched after
                         each buffer read
   -V, --version         print version information
-
+```
 
 
 Extra Notes:
@@ -100,12 +94,7 @@ Takes the binary file pattern.bin, and searches for an exact match within myfile
 ./searchbin.py -f pattern.bin myfile.exe
 
 
-Features:
-+No compiling necessary
-+Requires Python 2.7 or Python 3
-+Less code
-+Search in files of unlimited size
-keywords: hex hexidecimal binary like grep search seek find fast
+# Original attribution
 
 Please report bugs & feature requests to  sepero 111 @ gmx . com
   or https://github.com/Sepero/SearchBin/issues

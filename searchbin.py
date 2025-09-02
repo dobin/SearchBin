@@ -122,7 +122,7 @@ def get_args():
     p.add_argument('-f', '--file', type=str,
             metavar='FILE', dest='fpattern',
             help='file containing patterns to search for')
-    p.add_argument('--text', type=str,
+    p.add_argument('-t', '--text', type=str,
             metavar='PATTERN', dest='tpattern',
             help='text string like \"AB\"')
     p.add_argument('-p', '--pattern', type=str, # I would use -h for hex, but that's used for help output.
